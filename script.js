@@ -134,3 +134,10 @@ const countIO = new IntersectionObserver((entries) => {
   });
 }, { threshold: 0.6 });
 document.querySelectorAll(".num").forEach((n) => countIO.observe(n));
+
+// --- pasek postępu scrolla ---
+const bar = document.getElementById("progress");
+addEventListener("scroll", () => {
+  const max = document.documentElement.scrollHeight - innerHeight;
+  bar.style.width = (max > 0 ? (scrollY / max) * 100 : 0) + "%";
+}, { passive: true });
