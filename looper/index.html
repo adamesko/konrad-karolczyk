@@ -1,0 +1,1137 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drum Looper</title>
+<meta name="description" content="Skeuomorficzny drum sequencer w przeglądarce — metal, drewno, lampki, prawdziwy dźwięk.">
+<meta name="theme-color" content="#0d0c0b">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#2b2924;
+  --engrave:0 0 .6px rgba(0,0,0,.35);
+  --grime:linear-gradient(#808080,#808080);
+  --woodTex:linear-gradient(#6e3a1c,#5c2f16);
+  --capTex:conic-gradient(#eee,#999,#fff,#888,#eee);
+  --fine:var(--grain);
+  --dust:linear-gradient(transparent,transparent);
+  --page:#0d0c0b;
+  --amber:#ffb84d;
+
+  /* Brushed metal: noise stretched horizontally → hairline streaks */
+  --brush:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='300'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0025 0.9' numOctaves='4' seed='11'/%3E%3CfeColorMatrix values='1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 0 0 0 .75'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");
+  /* Fine powder grain */
+  --grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 0 0 0 .5'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  /* Wood grain: stretched vertically */
+  --wood:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='900'%3E%3Cfilter id='w'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.35 0.006' numOctaves='4' seed='8'/%3E%3CfeColorMatrix values='1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 0 0 0 .95'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23w)'/%3E%3C/svg%3E");
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --page:#0d0c0b; } }
+:root[data-theme="dark"]{ --page:#0d0c0b; }
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--page)}
+body{
+  min-height:100vh; overflow-x:hidden;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 8%, rgba(255,214,160,.10), transparent 70%),
+    radial-gradient(ellipse 120% 90% at 50% 0%, #29241f 0%, #13110f 55%, #080707 100%);
+  color:#bdb6a8; font-family:"Barlow Condensed",system-ui,sans-serif;
+  display:flex; flex-direction:column; align-items:center;
+  padding:48px 16px 40px;
+}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:focus-visible,.knob:focus-visible,.fader:focus-visible,.toggle:focus-visible{outline:2px solid rgba(255,184,77,.8);outline-offset:4px;border-radius:8px}
+
+.hint{margin-top:28px;font-size:16px;letter-spacing:.16em;text-transform:uppercase;color:#7c7568;text-align:center;line-height:1.6}
+.hint b{color:#d9a55a;font-weight:600}
+.back{margin-bottom:22px;font-size:14px;letter-spacing:.2em;text-transform:uppercase;color:#7c7568;text-decoration:none}
+.back:hover{color:#d9a55a}
+
+/* ---------- stage scaling ---------- */
+.fit{position:relative}
+.stage{position:absolute;left:0;top:0;width:1680px;transform-origin:0 0}
+
+/* ---------- unit / wood / chassis ---------- */
+.unit{
+  position:relative; display:flex; border-radius:10px;
+  box-shadow:0 50px 90px rgba(0,0,0,.75), 0 18px 30px rgba(0,0,0,.55), 0 2px 4px rgba(0,0,0,.6);
+}
+.cheek{
+  width:40px; flex:none;
+  background:
+    linear-gradient(90deg, rgba(0,0,0,.65), rgba(0,0,0,0) 22%, rgba(255,226,190,.20) 44%, rgba(255,255,255,.06) 54%, rgba(0,0,0,0) 74%, rgba(0,0,0,.75)),
+    linear-gradient(180deg, rgba(255,232,200,.16), rgba(0,0,0,0) 22%, rgba(0,0,0,0) 70%, rgba(0,0,0,.35)),
+    var(--woodTex);
+  background-size:auto, auto, 40px 1024px;
+}
+.cheek.l{border-radius:10px 0 0 10px}
+.cheek.r{border-radius:0 10px 10px 0}
+.chassis{
+  flex:1; padding:12px 10px; display:flex; flex-direction:column; gap:9px;
+  background:linear-gradient(#24221f,#141311);
+  box-shadow:inset 0 0 0 1px #0a0908, inset 0 2px 6px rgba(0,0,0,.9);
+}
+
+/* ---------- metal plate ---------- */
+.plate{
+  position:relative; border-radius:5px;
+  background:
+    var(--grime),
+    var(--brush),
+    radial-gradient(ellipse 70% 140% at 22% -20%, rgba(255,250,240,.3), rgba(255,255,255,0) 62%),
+    linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,0) 28%, rgba(0,0,0,.14)),
+    linear-gradient(100deg, #9f9d97 0%, #c6c4bd 17%, #adaba4 37%, #d0cec7 59%, #b8b6af 79%, #9e9c95 100%);
+  background-size:1400px 700px, 1024px 512px, auto, auto, auto;
+  background-position:var(--gpos, 0 0), var(--bpos, 0 0), 0 0, 0 0, 0 0;
+  background-blend-mode:overlay, overlay, normal, normal, normal;
+  box-shadow:
+    inset 0 1px 0 rgba(255,253,245,.95), inset 1px 0 0 rgba(255,253,245,.5),
+    inset 0 -1px 0 rgba(0,0,0,.42), inset -1px 0 0 rgba(0,0,0,.28),
+    inset 0 0 42px rgba(70,56,36,.24),
+    1px 2px 0 #59554b,
+    4px 10px 18px rgba(0,0,0,.55), 1px 3px 4px rgba(0,0,0,.5);
+}
+.screw{
+  position:absolute; width:20px; height:20px; border-radius:50%;
+  background:#8d8a83 center/100% 100% no-repeat;
+  box-shadow:
+    0 0 0 1.4px rgba(38,32,24,.32),
+    -.6px -.6px 0 1.6px rgba(255,252,240,.35),
+    1.5px 2.5px 2.5px 1px rgba(0,0,0,.45);
+}
+.lbl{
+  mix-blend-mode:multiply; font-weight:600; font-size:19px; letter-spacing:.2em; color:var(--ink);
+  text-shadow:var(--engrave); text-transform:uppercase; white-space:nowrap;
+}
+.lbl.sm{font-size:15px;letter-spacing:.14em}
+.divider{width:2px;align-self:stretch;margin:22px 0;background:linear-gradient(90deg,rgba(0,0,0,.22),rgba(255,255,255,.6))}
+
+/* ---------- header row ---------- */
+.head{height:132px;display:flex;align-items:center;padding:0 54px 0 64px;gap:40px}
+.brand{display:flex;align-items:center;gap:26px;width:440px}
+.brand svg{width:78px;color:var(--ink);filter:drop-shadow(0 1px 0 rgba(255,255,255,.65))}
+.title{font-weight:600;font-size:38px;letter-spacing:.32em;color:var(--ink);text-shadow:var(--engrave);line-height:1}
+.subt{font-weight:500;font-size:20px;letter-spacing:.62em;color:var(--ink);text-shadow:var(--engrave);margin-top:10px}
+
+.lcd{
+  position:relative; width:540px; height:66px; border-radius:6px; overflow:hidden;
+  display:flex; align-items:center; padding:0 26px 0 34px;
+  background:linear-gradient(180deg,#0a0908,#171512 70%,#1d1a16);
+  box-shadow:
+    0 0 0 3px #2c2a26, 0 0 0 4px rgba(0,0,0,.55), 0 1px 0 4px rgba(255,255,255,.55),
+    inset 0 4px 14px rgba(0,0,0,.95), inset 0 0 30px rgba(255,140,30,.06);
+}
+.lcd::before{ /* glass reflection */
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:2;
+  background:var(--dust), linear-gradient(172deg, rgba(255,255,255,.10) 0%, rgba(255,255,255,.03) 38%, rgba(255,255,255,0) 40%);
+  background-size:256px 256px, auto;
+}
+.lcd::after{ /* scanlines */
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:2;
+  background:repeating-linear-gradient(0deg, rgba(0,0,0,.28) 0 1px, transparent 1px 3px);
+}
+.lcd-txt{
+  flex:1; font-family:"Barlow Condensed"; font-weight:500; font-size:29px; letter-spacing:.2em;
+  color:#ffbf5e; text-transform:uppercase; white-space:nowrap; overflow:hidden;
+  text-shadow:0 0 3px rgba(255,170,60,.95), 0 0 12px rgba(255,140,30,.55), 0 0 26px rgba(255,120,20,.25);
+}
+.lcd-sub{font-size:16px;letter-spacing:.18em;color:rgba(255,180,80,.55);margin-right:20px;text-shadow:0 0 8px rgba(255,140,30,.4)}
+.arr{width:26px;height:32px;display:grid;place-items:center;position:relative;z-index:3}
+.arr::before{
+  content:"";border-style:solid;
+  filter:drop-shadow(0 0 4px rgba(255,160,40,.9)) drop-shadow(0 0 10px rgba(255,130,20,.5));
+}
+.arr.l::before{border-width:10px 15px 10px 0;border-color:transparent #ffb84d transparent transparent}
+.arr.r::before{border-width:10px 0 10px 15px;border-color:transparent transparent transparent #ffb84d}
+.arr:active::before{filter:drop-shadow(0 0 2px #fff) drop-shadow(0 0 14px rgba(255,160,40,1))}
+
+.hbtns{display:flex;align-items:flex-end;gap:34px;margin-left:auto}
+.col{display:flex;flex-direction:column;align-items:center;gap:10px}
+.sq{
+  width:46px;height:46px;border-radius:4px;padding:4px;
+  background:linear-gradient(#34322e,#141311);
+  box-shadow:0 1px 0 rgba(255,255,255,.6), 0 5px 9px rgba(0,0,0,.45);
+}
+.sq i{
+  display:block;width:100%;height:100%;border-radius:2px;position:relative;
+  background:linear-gradient(180deg,#fbfaf6,#e1ded6 55%,#cdc9c0);
+  box-shadow:inset 0 1px 0 #fff, inset 0 -2px 2px rgba(0,0,0,.18), 0 3px 0 #8f8b82, 0 4px 3px rgba(0,0,0,.5);
+  transform:translateY(-3px); transition:transform .06s, box-shadow .06s;
+}
+.sq i::after{content:"";position:absolute;left:50%;top:50%;width:3px;height:3px;border-radius:50%;background:#77736a;transform:translate(-50%,-50%)}
+.sq:active i,.sq.press i{transform:translateY(0);box-shadow:inset 0 1px 0 #fff, inset 0 -1px 2px rgba(0,0,0,.2), 0 0 0 #8f8b82, 0 1px 1px rgba(0,0,0,.5)}
+
+/* ---------- LED ---------- */
+.led{
+  width:15px;height:15px;border-radius:50%;flex:none;position:relative;
+  background:radial-gradient(circle at 40% 35%, #8a6f45, #4a3a22 60%, #2c2214);
+  box-shadow:0 0 0 2px #3b3934, 0 0 0 3px rgba(255,255,255,.45), inset 0 1px 2px rgba(0,0,0,.7);
+  transition:background .12s, box-shadow .12s;
+}
+.led.on{
+  background:radial-gradient(circle at 42% 36%, #fffaf0 0%, #ffd889 28%, #f7a43c 62%, #d37216 100%);
+  box-shadow:0 0 0 2px #3b3934, 0 0 0 3px rgba(255,255,255,.45),
+    0 0 8px 3px rgba(255,175,70,.85), 0 0 22px 8px rgba(255,140,30,.35), inset 0 -1px 2px rgba(150,60,0,.5);
+}
+
+/* ---------- bat toggle ---------- */
+.toggle{position:relative;width:62px;height:62px;cursor:pointer;touch-action:none}
+.toggle .nut{
+  position:absolute;inset:0;
+  clip-path:polygon(25% 3%,75% 3%,100% 50%,75% 97%,25% 97%,0 50%);
+  background:conic-gradient(from 200deg,#f2f2ee,#8d8b85 18%,#dad8d2 34%,#6f6d67 52%,#e8e7e2 68%,#8c8a84 84%,#f2f2ee);
+}
+.toggle .nutwrap{position:absolute;inset:0;filter:drop-shadow(0 5px 5px rgba(0,0,0,.45)) drop-shadow(0 1px 1px rgba(0,0,0,.5))}
+.toggle .well{
+  position:absolute;left:50%;top:50%;width:30px;height:30px;border-radius:50%;transform:translate(-50%,-50%);
+  background:radial-gradient(circle at 50% 40%, #6c6a65, #2b2a27 70%);
+  box-shadow:inset 0 2px 4px rgba(0,0,0,.8), 0 1px 0 rgba(255,255,255,.5);
+}
+.toggle .lever{
+  position:absolute;left:50%;top:50%;width:13px;height:34px;border-radius:7px;
+  background:linear-gradient(90deg,#5d5b57,#d9d8d4 30%,#ffffff 42%,#b6b4ae 60%,#4d4b47);
+  transform:translate(-50%,-92%); transition:transform .14s cubic-bezier(.5,1.6,.5,1);
+  filter:drop-shadow(3px 6px 4px rgba(0,0,0,.55));
+}
+.toggle .lever::after{
+  content:"";position:absolute;left:50%;top:-5px;width:20px;height:20px;border-radius:50%;transform:translateX(-50%);
+  background:radial-gradient(circle at 38% 32%, #fff 0%, #dcdbd6 28%, #8e8c86 70%, #55534e 100%);
+}
+.toggle.down .lever{transform:translate(-50%,-8%)}
+.toggle.down .lever::after{top:auto;bottom:-5px}
+
+/* ---------- knobs ----------
+   Layer order mimics a render: static shadow/AO -> rotating geometry -> static light.
+   Only .rot layers turn, so shadows and highlights stay put like real light. */
+.knob{position:relative;width:var(--s);height:var(--s);touch-action:none;cursor:grab;--rot:0deg}
+.knob.grab{cursor:grabbing}
+.knob .ao{
+  position:absolute;inset:-20%;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle closest-side at 54% 58%, rgba(28,22,14,.5) 66%, rgba(28,22,14,.16) 80%, rgba(28,22,14,0) 100%);
+}
+.knob .ticks{position:absolute;inset:0;pointer-events:none}
+.knob .ticks i{
+  position:absolute;left:50%;top:50%;width:2px;height:7px;border-radius:1px;background:var(--ink);mix-blend-mode:multiply;
+  transform:translate(-50%,-50%) rotate(var(--a)) translateY(calc(var(--s) / -2 - 10px));
+}
+.knob .ticks i.major{height:10px;width:2.4px}
+.knob .base{
+  position:absolute;inset:0;border-radius:50%;background:#141312;
+  box-shadow:
+    calc(var(--s) * .06) calc(var(--s) * .13) calc(var(--s) * .16) rgba(0,0,0,.5),
+    calc(var(--s) * .02) calc(var(--s) * .04) calc(var(--s) * .04) rgba(0,0,0,.55),
+    0 0 0 1px rgba(0,0,0,.75);
+}
+.knob .rot{position:absolute;inset:0;border-radius:50%;transform:rotate(var(--rot))}
+.knob .knurl{background:repeating-conic-gradient(#46433e 0 1.4deg, #1d1c1a 1.4deg 3deg, #0c0b0a 3deg 3.6deg)}
+.knob .light{
+  position:absolute;inset:0;border-radius:50%;pointer-events:none;mix-blend-mode:overlay;
+  background:conic-gradient(from 325deg,
+    rgba(255,255,255,.75), rgba(255,255,255,.15) 50deg, rgba(0,0,0,.45) 120deg,
+    rgba(0,0,0,.75) 180deg, rgba(0,0,0,.45) 240deg, rgba(255,255,255,.15) 300deg, rgba(255,255,255,.75));
+}
+.knob .rim{
+  position:absolute;inset:0;border-radius:50%;pointer-events:none;
+  box-shadow:
+    inset calc(var(--s) * .015) calc(var(--s) * .025) calc(var(--s) * .02) rgba(255,250,240,.22),
+    inset calc(var(--s) * -.03) calc(var(--s) * -.045) calc(var(--s) * .06) rgba(0,0,0,.65);
+}
+.knob .cap{
+  position:absolute;inset:15%;border-radius:50%;
+  background:var(--capTex) center/100% 100% no-repeat, #d6d6d2;
+  box-shadow:
+    calc(var(--s) * .03) calc(var(--s) * .055) calc(var(--s) * .06) rgba(0,0,0,.6),
+    0 0 0 1px rgba(0,0,0,.6);
+}
+.knob .ptr i{
+  position:absolute;left:50%;top:17%;width:4px;height:19%;border-radius:2px;transform:translateX(-50%);
+  background:linear-gradient(90deg,#6e110b,#c4372a 50%,#82170f);
+  box-shadow:inset 0 0 0 .5px rgba(0,0,0,.35);
+}
+.kn{display:flex;flex-direction:column;align-items:center}
+
+/* ---------- FX row ---------- */
+.fx{height:300px;display:flex;align-items:stretch}
+.sec{display:flex;flex-direction:column;align-items:center;padding-top:26px;position:relative}
+.tempo{width:320px}
+.tempo .dial{position:relative;width:260px;height:236px;margin-top:6px;display:grid;place-items:center}
+.tempo .dial svg{position:absolute;inset:0;overflow:visible}
+.tempo .num{position:absolute;font-weight:600;font-size:19px;color:var(--ink);text-shadow:var(--engrave);letter-spacing:.06em}
+.swing{width:230px}
+.swing .row{display:flex;justify-content:space-between;width:180px;margin-top:4px}
+.sync{
+  margin-top:20px;display:flex;align-items:center;gap:16px;padding:6px 18px 6px 8px;border-radius:4px;
+  background:linear-gradient(#d9d6ce,#c4c0b7);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.9), 0 0 0 1px rgba(0,0,0,.25), 0 2px 3px rgba(0,0,0,.25);
+}
+.sync .lamp{
+  width:32px;height:32px;border-radius:3px;
+  background:radial-gradient(circle at 50% 45%, #8a6a40, #5e4426 70%, #3f2c17);
+  box-shadow:inset 0 2px 3px rgba(0,0,0,.6), 0 0 0 2px #2c2a26;
+  transition:background .12s, box-shadow .12s;
+}
+.sync.on .lamp{
+  background:radial-gradient(circle at 50% 45%, #fffdf2 0%, #ffe0a0 28%, #f6b04f 62%, #d27f22 100%);
+  box-shadow:inset 0 0 6px rgba(255,255,255,.5), 0 0 0 2px #2c2a26, 0 0 14px 3px rgba(255,170,70,.65), 0 0 34px 8px rgba(255,140,30,.25);
+}
+.reverb{flex:1}
+.rdisp{
+  margin-top:18px;width:620px;height:62px;border-radius:5px;position:relative;
+  display:flex;align-items:center;justify-content:center;
+  background:
+    radial-gradient(ellipse 70% 120% at 50% 50%, rgba(255,250,230,.9), rgba(255,250,230,0) 70%),
+    linear-gradient(#f2e9d0,#ddd0ae);
+  box-shadow:0 0 0 3px #3a3833, 0 0 0 4px rgba(0,0,0,.4), 0 1px 0 4px rgba(255,255,255,.5),
+    inset 0 3px 8px rgba(80,55,10,.35), inset 0 0 26px rgba(255,214,140,.55);
+  font-family:"Barlow";font-weight:500;font-size:24px;color:#2a251c;letter-spacing:.01em;
+}
+.rdisp::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(175deg,rgba(255,255,255,.35),rgba(255,255,255,0) 45%)}
+.rdisp .ud{position:absolute;right:16px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px;z-index:1}
+.rdisp .ud button{width:22px;height:16px;display:grid;place-items:center}
+.rdisp .ud button::before{content:"";border-style:solid;border-color:transparent}
+.rdisp .ud .up::before{border-width:0 9px 12px;border-bottom-color:#2a251c}
+.rdisp .ud .dn::before{border-width:12px 9px 0;border-top-color:#2a251c}
+.knobs5{display:flex;gap:64px;margin-top:40px}
+.knobs5 .kn .lbl{margin-top:20px}
+.enh{width:250px}
+.enh .r{display:flex;align-items:center;gap:14px;margin-top:22px}
+
+/* ---------- sequencer row ---------- */
+.seq{height:292px;display:flex;align-items:flex-start;padding:22px 0 0}
+.tracks{width:250px;padding:50px 0 0 44px;display:flex;flex-direction:column;gap:12px}
+.trk{
+  width:192px;height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 14px 0 26px;border-radius:4px;
+  background:linear-gradient(#e0ddd5,#cbc7be);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.95), inset 0 -1px 0 rgba(0,0,0,.18), 0 0 0 1px rgba(0,0,0,.16), 0 2px 3px rgba(0,0,0,.28);
+  transition:transform .05s;
+}
+.trk:active{transform:translateY(1px)}
+.trk.muted .lbl{opacity:.45}
+.wellbox{
+  border-radius:10px;padding:12px 26px 18px;
+  background:linear-gradient(#191817,#23211f);
+  box-shadow:inset 0 5px 16px rgba(0,0,0,.95), inset 0 0 0 1px rgba(0,0,0,.9), 0 1px 0 rgba(255,255,255,.75), 0 -1px 0 rgba(0,0,0,.2);
+  position:relative;
+}
+.wellbox .screw{width:12px;height:12px;opacity:.6;filter:brightness(.45)}
+.grid{display:grid;grid-template-columns:repeat(16,52px);column-gap:12px;row-gap:12px}
+.grid{padding-right:30px}
+.grid .g1{position:relative;left:10px}.grid .g2{position:relative;left:20px}.grid .g3{position:relative;left:30px}
+.num{
+  text-align:center;font-weight:600;font-size:20px;color:#a39d91;height:26px;letter-spacing:.04em;
+  transition:color .08s,text-shadow .08s;
+}
+.num.now{color:#ffc56a;text-shadow:0 0 6px rgba(255,170,60,.9),0 0 16px rgba(255,140,30,.5)}
+.pad{
+  width:52px;height:40px;border-radius:5px;position:relative;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 18%, rgba(255,255,255,.12), rgba(255,255,255,0) 70%),
+    linear-gradient(180deg,#5c5a55 0%,#46443f 50%,#393734 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.2), inset 0 -2px 3px rgba(0,0,0,.45), 0 0 0 1px #0f0e0d, 0 3px 4px rgba(0,0,0,.7);
+  transition:background .1s, box-shadow .18s, filter .1s;
+}
+.pad:active{transform:translateY(1px)}
+.pad.dim{opacity:.35}
+.pad.now:not(.on){
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 18%, rgba(255,255,255,.2), rgba(255,255,255,0) 70%),
+    linear-gradient(180deg,#7a766e,#5f5c56 50%,#4e4b46);
+}
+.pad.on{
+  background:
+    radial-gradient(ellipse 62% 60% at 50% 48%, #fffaea 0%, #ffd98c 30%, #f7a843 66%, #d7781a 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.75), inset 0 -3px 6px rgba(150,60,0,.55), inset 0 0 0 1px rgba(120,50,0,.4),
+    0 0 0 1px #2e1a06, 0 0 10px 2px rgba(255,170,60,.7), 0 0 30px 8px rgba(255,140,30,.3), 0 3px 4px rgba(0,0,0,.5);
+}
+.pad.on.now{
+  filter:brightness(1.18) saturate(1.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.9), inset 0 -3px 6px rgba(150,60,0,.4),
+    0 0 0 1px #2e1a06, 0 0 14px 4px rgba(255,190,90,.9), 0 0 46px 14px rgba(255,150,40,.45), 0 3px 4px rgba(0,0,0,.5);
+}
+.stepm{width:180px;margin-left:auto;display:flex;flex-direction:column;align-items:center;gap:16px;padding-top:38px}
+.stepm .lbl{text-align:center;line-height:1.3}
+
+/* ---------- bottom row ---------- */
+.bot{height:186px;display:flex;align-items:center;padding:0 40px 0 50px}
+.big{
+  width:78px;height:78px;border-radius:6px;padding:7px;
+  background:linear-gradient(#3d3b37,#181715);
+  box-shadow:0 1px 0 rgba(255,255,255,.65), 0 8px 14px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.15);
+}
+.big .lens{
+  display:block;width:100%;height:100%;border-radius:3px;
+  background:radial-gradient(circle at 50% 45%, #8a6a40, #5e4426 70%, #3f2c17);
+  box-shadow:inset 0 2px 4px rgba(0,0,0,.65), inset 0 0 0 1px rgba(0,0,0,.5);
+  transition:background .1s, box-shadow .1s, filter .1s;
+}
+.big.on .lens{
+  background:radial-gradient(circle at 50% 45%, #fffdf3 0%, #ffe4a6 24%, #f8b95b 60%, #d58526 100%);
+  box-shadow:inset 0 0 10px rgba(255,255,255,.55), inset 0 -3px 6px rgba(150,70,0,.4),
+    0 0 18px 5px rgba(255,170,70,.7), 0 0 60px 16px rgba(255,150,40,.28);
+}
+.big.on.beat .lens{filter:brightness(1.12)}
+.fadersec{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
+.fader{position:relative;width:300px;height:46px;touch-action:none;cursor:pointer}
+.fader .trk2{
+  position:absolute;left:0;right:0;top:50%;height:13px;transform:translateY(-50%);border-radius:7px;
+  background:linear-gradient(#0d0c0b,#22201e);
+  box-shadow:inset 0 2px 4px rgba(0,0,0,.95), 0 1px 0 rgba(255,255,255,.7), 0 -1px 0 rgba(0,0,0,.25);
+}
+.fader .fcap{
+  position:absolute;top:50%;width:32px;height:44px;border-radius:3px;transform:translate(-50%,-50%);
+  background:
+    repeating-linear-gradient(0deg, rgba(0,0,0,0) 0 3px, rgba(0,0,0,.07) 3px 4px),
+    linear-gradient(90deg,#86847f,#e2e1dc 26%,#ffffff 42%,#cfcdc8 58%,#76746f);
+  box-shadow:5px 10px 13px rgba(0,0,0,.45), 1px 3px 3px rgba(0,0,0,.5), inset 0 1px 0 #fff, inset 0 -2px 2px rgba(0,0,0,.25), 0 0 0 1px rgba(0,0,0,.35);
+}
+.fader .fcap::after{content:"";position:absolute;left:50%;top:5px;bottom:5px;width:2px;transform:translateX(-50%);background:#3a3833;box-shadow:1px 0 0 rgba(255,255,255,.6)}
+.scale{position:relative;width:300px;height:30px}
+.scale i{position:absolute;top:0;width:2px;height:8px;background:var(--ink);box-shadow:1px 1px 0 rgba(255,255,255,.5);transform:translateX(-50%)}
+.scale span{position:absolute;top:11px;transform:translateX(-50%);font-weight:600;font-size:16px;color:var(--ink);text-shadow:var(--engrave)}
+.emblem{width:100px;color:var(--ink);filter:drop-shadow(0 1px 0 rgba(255,255,255,.65))}
+.pm{display:flex;justify-content:space-between;width:120px;font-weight:700;font-size:16px;color:var(--ink);margin-top:4px;text-shadow:var(--engrave)}
+/* ---------- realism layers ---------- */
+.title,.subt,.brand svg,.emblem,.tempo .num,.tempo .dial svg,.scale span,.scale i,.pm{mix-blend-mode:multiply}
+.pad::after,.trk::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:var(--fine);background-size:128px 128px;mix-blend-mode:overlay;opacity:.45;
+}
+.trk{position:relative}
+.grade{position:absolute;inset:0;border-radius:10px;pointer-events:none;z-index:5}
+.grade.key{
+  mix-blend-mode:soft-light;
+  background:radial-gradient(ellipse 60% 75% at 24% 6%, rgba(255,226,186,.55), rgba(255,226,186,0) 72%);
+}
+.grade.vig{
+  mix-blend-mode:multiply;
+  background:
+    radial-gradient(ellipse 80% 95% at 38% 28%, rgba(255,255,255,0) 48%, rgba(44,34,24,.6) 100%),
+    linear-gradient(180deg, rgba(255,255,255,0) 55%, rgba(70,82,98,.28) 100%);
+}
+body::after{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:100;
+  background:var(--fine);background-size:256px 256px;mix-blend-mode:overlay;opacity:.09;
+}
+</style>
+</head>
+<body>
+
+<a class="back" href="../">← wróć na stronę</a>
+
+<div class="fit" id="fit">
+<div class="stage" id="stage">
+<div class="unit">
+  <div class="cheek l"></div>
+  <div class="chassis">
+
+    <!-- HEADER -->
+    <div class="plate head">
+      <div class="brand">
+        <svg viewBox="0 0 120 72" aria-hidden="true">
+          <g fill="none" stroke="currentColor" stroke-width="3.2">
+            <ellipse cx="60" cy="36" rx="56" ry="32"/>
+            <ellipse cx="60" cy="36" rx="25" ry="32"/>
+            <path d="M12 20h96M12 52h96M60 4v64"/>
+          </g>
+          <rect x="31" y="24" width="58" height="24" rx="12" fill="#cfcbc3" stroke="currentColor" stroke-width="3"/>
+          <text x="60" y="43" text-anchor="middle" font-family="Barlow Condensed" font-weight="700" font-size="21" letter-spacing="2" fill="currentColor">KK</text>
+        </svg>
+        <div>
+          <div class="title">DRUM LOOPER</div>
+          <div class="subt">SEQUENCER</div>
+        </div>
+      </div>
+
+      <div class="lcd" role="status" aria-live="polite">
+        <div class="lcd-txt" id="lcd">KONRAD GROOVE</div>
+        <div class="lcd-sub" id="lcdSub">P01</div>
+        <button class="arr l" id="prev" aria-label="Poprzedni preset"></button>
+        <button class="arr r" id="next" aria-label="Następny preset"></button>
+      </div>
+
+      <div class="hbtns">
+        <div class="col"><span class="lbl sm">SAVE</span><button class="sq" id="save" aria-label="Zapisz"><i></i></button></div>
+        <div class="col"><span class="lbl sm">LOAD</span><button class="sq" id="load" aria-label="Wczytaj"><i></i></button></div>
+        <div class="col" style="padding-bottom:16px"><span class="led on" id="fxLed"></span></div>
+        <div class="col"><span class="lbl sm">BYPASS</span><div class="toggle down" id="bypass" tabindex="0" role="switch" aria-label="Bypass" aria-checked="false"></div></div>
+      </div>
+    </div>
+
+    <!-- FX -->
+    <div class="plate fx">
+      <div class="sec tempo">
+        <span class="lbl">TEMPO</span>
+        <div class="dial">
+          <svg viewBox="0 0 260 236" aria-hidden="true">
+            <circle cx="130" cy="122" r="104" fill="none" stroke="#2b2924" stroke-width="2"
+              stroke-dasharray="490.1 1000" transform="rotate(135 130 122)"/>
+          </svg>
+          <span class="num" style="left:118px;top:-2px">100</span>
+          <span class="num" style="left:14px;top:186px">20</span>
+          <span class="num" style="right:-4px;top:186px">200</span>
+          <div class="knob" data-p="tempo" data-ticks="19" style="--s:156px;margin-top:16px"></div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="sec swing">
+        <span class="lbl">SWING</span>
+        <div class="knob" data-p="swing" style="--s:86px;margin-top:30px"></div>
+        <div class="row"><span class="lbl sm">0%</span><span class="lbl sm">100%</span></div>
+        <button class="sync on" id="sync" aria-pressed="true"><span class="lamp"></span><span class="lbl sm">SYNC</span></button>
+      </div>
+      <div class="divider"></div>
+      <div class="sec reverb">
+        <span class="lbl">REVERB SELECTION</span>
+        <div class="rdisp">
+          <span id="rname">Great British Spring</span>
+          <div class="ud"><button class="up" id="rup" aria-label="Poprzedni pogłos"></button><button class="dn" id="rdn" aria-label="Następny pogłos"></button></div>
+        </div>
+        <div class="knobs5">
+          <div class="kn"><div class="knob" data-p="decay" style="--s:84px"></div><span class="lbl">DECAY</span></div>
+          <div class="kn"><div class="knob" data-p="predelay" style="--s:84px"></div><span class="lbl">PRE-DELAY</span></div>
+          <div class="kn"><div class="knob" data-p="drive" style="--s:84px"></div><span class="lbl">DRIVE</span></div>
+          <div class="kn"><div class="knob" data-p="hipass" style="--s:84px"></div><span class="lbl">HI PASS</span></div>
+          <div class="kn"><div class="knob" data-p="lopass" style="--s:84px"></div><span class="lbl">LO PASS</span></div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="sec enh">
+        <span class="lbl" style="margin-top:30px">ENHANCE</span>
+        <div class="r"><span class="lbl sm">HIFI</span><span class="led on" id="hifiLed"></span><div class="toggle" id="enhance" tabindex="0" role="switch" aria-label="Enhance HIFI" aria-checked="true"></div></div>
+        <span class="lbl sm" style="margin-top:16px;margin-left:62px">NATURAL</span>
+      </div>
+    </div>
+
+    <!-- SEQUENCER -->
+    <div class="plate seq">
+      <div class="tracks" id="tracks"></div>
+      <div class="wellbox">
+        <div class="grid" id="grid"></div>
+      </div>
+      <div class="stepm">
+        <span class="lbl">STEP<br>MODE</span>
+        <div class="toggle" id="stepmode" tabindex="0" role="switch" aria-label="Tryb 16 / 8 kroków" aria-checked="true"></div>
+        <span class="led on" id="stepLed"></span>
+        <span class="lbl sm" id="stepTxt">16</span>
+      </div>
+    </div>
+
+    <!-- BOTTOM -->
+    <div class="plate bot">
+      <div class="col" style="width:96px">
+        <span class="lbl" id="playLbl">PLAY</span>
+        <button class="big" id="play" aria-label="Start / stop"><span class="lens"></span></button>
+      </div>
+      <div class="divider" style="margin:28px 40px 28px 34px"></div>
+      <div class="fadersec">
+        <span class="lbl">GATE</span>
+        <div class="fader" data-p="gate" tabindex="0"></div>
+        <div class="scale"></div>
+      </div>
+      <div class="kn" style="margin-left:96px">
+        <span class="lbl" style="margin-bottom:22px">INPUT</span>
+        <div class="knob" data-p="input" style="--s:80px"></div>
+        <div class="pm"><span>−</span><span>+</span></div>
+      </div>
+      <svg class="emblem" style="margin:0 74px" viewBox="0 0 120 72" aria-hidden="true">
+        <g fill="none" stroke="currentColor" stroke-width="3.2">
+          <ellipse cx="60" cy="36" rx="56" ry="32"/><ellipse cx="60" cy="36" rx="25" ry="32"/>
+          <path d="M12 20h96M12 52h96M60 4v64"/>
+        </g>
+        <rect x="31" y="24" width="58" height="24" rx="12" fill="#cfcbc3" stroke="currentColor" stroke-width="3"/>
+        <text x="60" y="43" text-anchor="middle" font-family="Barlow Condensed" font-weight="700" font-size="21" letter-spacing="2" fill="currentColor">KK</text>
+      </svg>
+      <div class="kn">
+        <span class="lbl" style="margin-bottom:22px">OUTPUT</span>
+        <div class="knob" data-p="output" style="--s:80px"></div>
+        <div class="pm"><span>−</span><span>+</span></div>
+      </div>
+      <div class="fadersec" style="margin-left:auto">
+        <span class="lbl">REVERB MIX</span>
+        <div class="fader" data-p="mix" tabindex="0"></div>
+        <div class="scale"></div>
+      </div>
+    </div>
+
+  </div>
+  <div class="cheek r"></div>
+  <div class="grade key"></div>
+  <div class="grade vig"></div>
+</div>
+</div>
+</div>
+
+<p class="hint"><b>PLAY</b> odpala bit · gałki: przeciągnij w górę/dół (shift = precyzyjnie, dwuklik = reset) · klikaj kroki · nazwy ścieżek = mute</p>
+
+<script>
+(() => {
+"use strict";
+const $ = s => document.querySelector(s);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+let ctx, A = {}, noiseBuf, irTimer, ready = false;
+
+/* ---------------- procedural textures (canvas) ----------------
+   Generated once at load. Everything shares one light: up-left, slightly in front. */
+const TEX = (() => {
+  const mk = (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return [c, c.getContext("2d")]; };
+  let sd = 20261006;
+  const rnd = () => (sd = (Math.imul(sd, 1664525) + 1013904223) >>> 0) / 4294967296;
+  const hash = (x, y) => { let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+  const sm = t => t * t * (3 - 2 * t);
+  const noise = (x, y, px = 1 << 30, py = 1 << 30) => {
+    const xi = Math.floor(x), yi = Math.floor(y), fx = sm(x - xi), fy = sm(y - yi);
+    const X0 = ((xi % px) + px) % px, X1 = (X0 + 1) % px, Y0 = ((yi % py) + py) % py, Y1 = (Y0 + 1) % py;
+    const a = hash(X0, Y0), b = hash(X1, Y0), c = hash(X0, Y1), d = hash(X1, Y1);
+    return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
+  };
+  const fbm = (x, y, o = 4) => { let s = 0, a = .5, n = 0; for (let i = 0; i < o; i++) { s += a * noise(x, y); n += a; x *= 2.03; y *= 2.03; a *= .5; } return s / n; };
+  const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+  const nrm = (x, y, z) => { const l = Math.hypot(x, y, z); return [x / l, y / l, z / l]; };
+  const L = nrm(-.45, -.62, .64), Hv = nrm(L[0], L[1], L[2] + 1);
+
+  /* Brushed aluminium: per-row hairlines that vary slowly along x, tileable horizontally. */
+  function brushed(){
+    const W = 1024, H = 512, [c, x] = mk(W, H), im = x.createImageData(W, H), d = im.data;
+    for (let y = 0; y < H; y++) {
+      const band = (hash(y, 91) - .5) * 9 + (noise(3.3, y / 37) - .5) * 14;
+      for (let i = 0; i < W; i++) {
+        const u = i / W;
+        const v = 128 + band
+          + (noise(u * 5, y * .7, 5) - .5) * 30
+          + (noise(u * 46, y * .7 + 17, 46) - .5) * 14
+          + (rnd() - .5) * 9;
+        const k = (y * W + i) * 4; d[k] = d[k + 1] = d[k + 2] = v; d[k + 3] = 255;
+      }
+    }
+    x.putImageData(im, 0, 0);
+    for (let n = 0; n < 480; n++) {           // wear scratches catching the light
+      const x0 = rnd() * W, y0 = rnd() * H, len = 3 + Math.pow(rnd(), 2.6) * 160;
+      const a = rnd() < .55 ? (rnd() - .5) * .35 : rnd() * Math.PI;
+      x.strokeStyle = rnd() < .72 ? `rgba(255,255,255,${.05 + rnd() * .18})` : `rgba(0,0,0,${.05 + rnd() * .14})`;
+      x.lineWidth = .45 + rnd() * .75;
+      x.beginPath(); x.moveTo(x0, y0);
+      x.quadraticCurveTo(x0 + Math.cos(a) * len / 2 + (rnd() - .5) * 8, y0 + Math.sin(a) * len / 2 + (rnd() - .5) * 8, x0 + Math.cos(a) * len, y0 + Math.sin(a) * len);
+      x.stroke();
+    }
+    return c.toDataURL("image/jpeg", .9);
+  }
+
+  /* Grime: low-frequency blotches, oily fingerprints, wipe smears. Neutral grey = no change under overlay. */
+  function grime(){
+    const W = 1400, H = 700, [c, x] = mk(W, H), [s, sx] = mk(175, 88), im = sx.createImageData(175, 88), d = im.data;
+    for (let y = 0; y < 88; y++) for (let i = 0; i < 175; i++) {
+      const v = 128 + (fbm(i / 26, y / 26, 5) - .5) * 64 + (fbm(i / 7 + 40, y / 7, 3) - .5) * 26;
+      const k = (y * 175 + i) * 4; d[k] = d[k + 1] = d[k + 2] = v; d[k + 3] = 255;
+    }
+    sx.putImageData(im, 0, 0);
+    x.imageSmoothingQuality = "high"; x.drawImage(s, 0, 0, W, H);
+    for (let f = 0; f < 6; f++) {
+      const cx = 90 + rnd() * (W - 180), cy = 70 + rnd() * (H - 140), sc = .8 + rnd() * .5;
+      x.save(); x.translate(cx, cy); x.rotate(rnd() * Math.PI);
+      for (let k = 2; k < 24; k++) {
+        x.strokeStyle = rnd() < .6 ? `rgba(70,64,54,${.05 + rnd() * .06})` : `rgba(230,226,216,${.04 + rnd() * .05})`;
+        x.lineWidth = 1.1; x.setLineDash([2 + rnd() * 16, 1 + rnd() * 6]);
+        x.beginPath(); x.ellipse((rnd() - .5) * 1.5, k * .25, k * 1.2 * sc, k * 1.55 * sc, 0, 0, Math.PI * 2); x.stroke();
+      }
+      x.restore();
+    }
+    for (let k = 0; k < 14; k++) {
+      const g = x.createLinearGradient(0, 0, 160, 0), a = .03 + rnd() * .04;
+      g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(.5, `rgba(${rnd() < .5 ? "40,36,30" : "255,250,240"},${a})`); g.addColorStop(1, "rgba(0,0,0,0)");
+      x.save(); x.translate(rnd() * W, rnd() * H); x.rotate((rnd() - .5) * .8); x.fillStyle = g; x.fillRect(0, -8 - rnd() * 14, 160 + rnd() * 200, 16 + rnd() * 24); x.restore();
+    }
+    return c.toDataURL("image/jpeg", .88);
+  }
+
+  function fine(){
+    const S = 256, [c, x] = mk(S, S), im = x.createImageData(S, S), d = im.data;
+    for (let k = 0; k < d.length; k += 4) { const v = 128 + (rnd() + rnd() - 1) * 70; d[k] = d[k + 1] = d[k + 2] = v; d[k + 3] = 255; }
+    x.putImageData(im, 0, 0); return c.toDataURL("image/png");
+  }
+
+  function dust(){
+    const S = 256, [c, x] = mk(S, S);
+    for (let n = 0; n < 90; n++) { x.fillStyle = `rgba(255,240,220,${.05 + rnd() * .2})`; x.beginPath(); x.arc(rnd() * S, rnd() * S, .3 + rnd() * 1.1, 0, 7); x.fill(); }
+    for (let n = 0; n < 3; n++) {
+      x.strokeStyle = `rgba(255,240,220,${.05 + rnd() * .06})`; x.lineWidth = .6;
+      const x0 = rnd() * S, y0 = rnd() * S; x.beginPath(); x.moveTo(x0, y0);
+      x.bezierCurveTo(x0 + rnd() * 30, y0 + rnd() * 20, x0 + rnd() * 40, y0 - rnd() * 20, x0 + 20 + rnd() * 40, y0 + rnd() * 20); x.stroke();
+    }
+    return c.toDataURL("image/png");
+  }
+
+  /* Lacquered teak: warped growth lines, fibres, pores, slow colour drift. */
+  function wood(){
+    const W = 80, H = 1024, [c, x] = mk(W, H), im = x.createImageData(W, H), d = im.data;
+    for (let y = 0; y < H; y++) for (let i = 0; i < W; i++) {
+      const w = (fbm(i / 30, y / 260, 3) - .5) * 30 + Math.sin(y / 380 + 1.3) * 7;
+      const ring = Math.pow(.5 + .5 * Math.sin((i + w) / 7.5 * Math.PI * 2), 6);
+      const fib = noise(i * .7, y / 55), fib2 = noise(i * 1.6 + 9, y / 18);
+      const pore = noise(i * 1.3 + 3, y / 9) > .84 ? 1 : 0;
+      const col = fbm(i / 60 + 7, y / 420, 2);
+      const t = clamp01(.36 * ring + .2 * fib + .1 * fib2 + .2 * pore + .45 * (col - .5) + .2);
+      const k = (y * W + i) * 4;
+      d[k] = 178 - 112 * t; d[k + 1] = 100 - 70 * t; d[k + 2] = 52 - 39 * t; d[k + 3] = 255;
+    }
+    x.putImageData(im, 0, 0); return c.toDataURL("image/jpeg", .9);
+  }
+
+  /* Pan-head Phillips screw: heightfield -> normals -> Blinn-Phong + fake sky/ground reflection. */
+  function screw(angle, seed){
+    const S = 72, [c, x] = mk(S, S), im = x.createImageData(S, S), d = im.data;
+    const ca = Math.cos(angle), sa = Math.sin(angle);
+    const dome = (u, v) => .34 * Math.sqrt(Math.max(0, 1 - u * u - v * v));
+    const H = (u, v) => {
+      const r = Math.hypot(u, v), a = Math.abs(u * ca + v * sa), b = Math.abs(-u * sa + v * ca);
+      const arm = (p, q) => p < .1 ? Math.max(0, 1 - q / .6) : 0;
+      const cone = Math.max(0, .24 - r) / .24;
+      return dome(u, v) - .2 * Math.max(Math.max(arm(a, b), arm(b, a)), cone * 1.1);
+    };
+    const e = 2 / S;
+    for (let py = 0; py < S; py++) for (let px = 0; px < S; px++) {
+      const u = (px + .5) / S * 2 - 1, v = (py + .5) / S * 2 - 1, r = Math.hypot(u, v), k = (py * S + px) * 4;
+      if (r > 1) { d[k + 3] = 0; continue; }
+      const h = H(u, v), hx = (H(u + e, v) - H(u - e, v)) / (2 * e), hy = (H(u, v + e) - H(u, v - e)) / (2 * e);
+      const n = nrm(-hx, -hy, 1);
+      const dif = Math.max(0, n[0] * L[0] + n[1] * L[1] + n[2] * L[2]);
+      const spec = Math.pow(Math.max(0, n[0] * Hv[0] + n[1] * Hv[1] + n[2] * Hv[2]), 70);
+      const ry = 2 * n[2] * n[1], rx = 2 * n[2] * n[0];
+      const env = sm(clamp01((-ry - rx * .4) * 1.3 + .45));
+      const slot = h < dome(u, v) - .005, ao = slot ? .38 : 1;
+      const grit = .88 + .24 * hash(px * 3 + seed, py * 7);
+      const dirt = clamp01((fbm(u * 3 + seed, v * 3, 3) - .55) * 2.2) * (slot ? 1.4 : .7);
+      const lit = (.2 + .5 * dif);
+      let R = lit * .74 + .38 * env, G = lit * .73 + .37 * env, B = lit * .7 + .36 * env;
+      R = (R * ao * grit + spec) * (1 - dirt) + .30 * dirt * ao;
+      G = (G * ao * grit + spec) * (1 - dirt) + .23 * dirt * ao;
+      B = (B * ao * grit + spec * .95) * (1 - dirt) + .16 * dirt * ao;
+      d[k] = clamp01(R) * 255; d[k + 1] = clamp01(G) * 255; d[k + 2] = clamp01(B) * 255;
+      d[k + 3] = clamp01((1 - r) * S / 2.2) * 255;
+    }
+    x.putImageData(im, 0, 0); return c.toDataURL("image/png");
+  }
+
+  /* Spun-aluminium cap: anisotropic "bow-tie" highlight along the light axis. Static — never rotates. */
+  function cap(){
+    const S = 256, [c, x] = mk(S, S), im = x.createImageData(S, S), d = im.data;
+    const l2 = Math.hypot(L[0], L[1]), lx = L[0] / l2, ly = L[1] / l2, tl = Math.atan2(ly, lx);
+    for (let py = 0; py < S; py++) for (let px = 0; px < S; px++) {
+      const u = (px + .5) / S * 2 - 1, v = (py + .5) / S * 2 - 1, r = Math.hypot(u, v), k = (py * S + px) * 4;
+      if (r > 1) { d[k + 3] = 0; continue; }
+      const th = Math.atan2(v, u), cs = Math.abs(Math.cos(th - tl));
+      const rings = (hash(Math.floor(r * 230), 3) - .5) * .07 + (noise(r * 700, 1.5) - .5) * .05;
+      let I = .46 + .3 * Math.pow(cs, 5) + .26 * Math.pow(cs, 70) + .1 * (u * lx + v * ly) + rings + (rnd() - .5) * .025;
+      if (r > .9) { const t = sm((r - .9) / .1), lit = (u * lx + v * ly) / r; I = I * (1 - t) + (.5 + .42 * lit) * t; }
+      d[k] = clamp01(I * .98) * 255; d[k + 1] = clamp01(I * .985) * 255; d[k + 2] = clamp01(I) * 255;
+      d[k + 3] = clamp01((1 - r) * S / 2.5) * 255;
+    }
+    x.putImageData(im, 0, 0); return c.toDataURL("image/png");
+  }
+
+  const t = {brush:brushed(), grime:grime(), fine:fine(), dust:dust(), wood:wood(), cap:cap(), screws:[]};
+  for (let i = 0; i < 6; i++) t.screws.push(screw(rnd() * Math.PI, i * 97));
+  const st = document.documentElement.style;
+  st.setProperty("--brush", `url(${t.brush})`);
+  st.setProperty("--grime", `url(${t.grime})`);
+  st.setProperty("--fine", `url(${t.fine})`);
+  st.setProperty("--dust", `url(${t.dust})`);
+  st.setProperty("--woodTex", `url(${t.wood})`);
+  st.setProperty("--capTex", `url(${t.cap})`);
+  return t;
+})();
+
+/* ---------------- fit to viewport ---------------- */
+const stage = $("#stage"), fit = $("#fit");
+function doFit(){
+  const W = 1680, s = Math.min(1, (document.documentElement.clientWidth - 32) / W);
+  stage.style.transform = `scale(${s})`;
+  fit.style.width = W * s + "px";
+  fit.style.height = stage.offsetHeight * s + "px";
+}
+addEventListener("resize", doFit);
+
+/* ---------------- screws ---------------- */
+document.querySelectorAll(".plate, .wellbox").forEach(p => {
+  if (p.classList.contains("plate")) {
+    p.style.setProperty("--gpos", `${-Math.random() * 600 | 0}px ${-Math.random() * 400 | 0}px`);
+    p.style.setProperty("--bpos", `${-Math.random() * 1024 | 0}px ${-Math.random() * 512 | 0}px`);
+  }
+  const o = p.classList.contains("wellbox") ? 7 : 11;
+  [[o, o, "left", "top"], [o, o, "right", "top"], [o, o, "left", "bottom"], [o, o, "right", "bottom"]].forEach(([x, y, h, v]) => {
+    const s = document.createElement("i");
+    s.className = "screw";
+    s.style[h] = x + "px"; s.style[v] = y + "px";
+    s.style.backgroundImage = `url(${TEX.screws[Math.random() * TEX.screws.length | 0]})`;
+    p.appendChild(s);
+  });
+});
+
+/* ---------------- params ---------------- */
+const P = {
+  tempo:   {min:20,  max:200,   v:96,   step:1,   fmt:v=>`TEMPO ${v} BPM`},
+  swing:   {min:0,   max:100,   v:28,   step:1,   fmt:v=>`SWING ${v}%`},
+  decay:   {min:.2,  max:6,     v:1.6,  step:.1,  fmt:v=>`DECAY ${v.toFixed(1)} S`},
+  predelay:{min:0,   max:200,   v:18,   step:1,   fmt:v=>`PRE-DELAY ${v} MS`},
+  drive:   {min:0,   max:100,   v:22,   step:1,   fmt:v=>`DRIVE ${v}%`},
+  hipass:  {min:20,  max:1000,  v:40,   log:true, fmt:v=>`HI PASS ${Math.round(v)} HZ`},
+  lopass:  {min:800, max:20000, v:15000,log:true, fmt:v=>`LO PASS ${(v/1000).toFixed(1)} KHZ`},
+  input:   {min:-12, max:12,    v:0,    step:.5,  fmt:v=>`INPUT ${v>0?"+":""}${v.toFixed(1)} DB`},
+  output:  {min:-30, max:6,     v:-4,   step:.5,  fmt:v=>`OUTPUT ${v>0?"+":""}${v.toFixed(1)} DB`},
+  gate:    {min:0,   max:1,     v:.55,            fmt:v=>`GATE ${Math.round(v*100)}%`},
+  mix:     {min:0,   max:1,     v:.3,             fmt:v=>`REVERB MIX ${Math.round(v*100)}%`},
+};
+for (const k in P) P[k].def = P[k].v;
+const toN = c => c.log ? Math.log(c.v / c.min) / Math.log(c.max / c.min) : (c.v - c.min) / (c.max - c.min);
+const fromN = (c, n) => {
+  let v = c.log ? c.min * Math.pow(c.max / c.min, n) : c.min + n * (c.max - c.min);
+  if (c.step) v = Math.round(v / c.step) * c.step;
+  return +v.toFixed(4);
+};
+const controls = {};
+
+/* ---------------- LCD ---------------- */
+const lcd = $("#lcd"), lcdSub = $("#lcdSub");
+let lcdTimer;
+function flash(txt, ms = 1100){
+  lcd.textContent = txt;
+  clearTimeout(lcdTimer);
+  lcdTimer = setTimeout(() => lcd.textContent = presets[preset].name, ms);
+}
+
+/* ---------------- knobs ---------------- */
+document.querySelectorAll(".knob").forEach(el => {
+  const p = el.dataset.p, c = P[p], nt = +el.dataset.ticks || 11;
+  let ticks = "";
+  for (let i = 0; i < nt; i++) {
+    const a = -135 + 270 * i / (nt - 1);
+    ticks += `<i class="${i === 0 || i === nt - 1 || i === (nt - 1) / 2 ? "major" : ""}" style="--a:${a}deg"></i>`;
+  }
+  el.innerHTML = `<div class="ao"></div><div class="ticks">${ticks}</div><div class="base"></div><div class="rot knurl"></div><div class="light"></div><div class="rim"></div><div class="cap"></div><div class="rot ptr"><i></i></div>`;
+  el.tabIndex = 0;
+  el.setAttribute("role", "slider");
+  el.setAttribute("aria-label", p);
+  const render = () => {
+    el.style.setProperty("--rot", (-135 + 270 * toN(c)) + "deg");
+    el.setAttribute("aria-valuetext", c.fmt(c.v));
+  };
+  const setN = (n, silent) => {
+    const v = fromN(c, clamp(n, 0, 1));
+    if (v === c.v && !silent) return;
+    c.v = v; render(); apply(p);
+    if (!silent) flash(c.fmt(v));
+  };
+  controls[p] = { set(v){ c.v = v; render(); apply(p); } };
+  let y0, n0;
+  el.addEventListener("pointerdown", e => {
+    el.setPointerCapture(e.pointerId); y0 = e.clientY; n0 = toN(c); el.classList.add("grab"); e.preventDefault();
+  });
+  el.addEventListener("pointermove", e => {
+    if (!el.hasPointerCapture(e.pointerId)) return;
+    setN(n0 + (y0 - e.clientY) / (e.shiftKey ? 900 : 220));
+  });
+  el.addEventListener("pointerup", () => el.classList.remove("grab"));
+  el.addEventListener("wheel", e => { e.preventDefault(); setN(toN(c) - Math.sign(e.deltaY) * (c.step && !c.log ? Math.max(c.step / (c.max - c.min), .01) : .015)); }, {passive:false});
+  el.addEventListener("dblclick", () => { c.v = c.def; render(); apply(p); flash(c.fmt(c.v)); });
+  el.addEventListener("keydown", e => {
+    const d = {ArrowUp:1, ArrowRight:1, ArrowDown:-1, ArrowLeft:-1}[e.key];
+    if (d) { e.preventDefault(); setN(toN(c) + d * .02); }
+  });
+  render();
+});
+
+/* ---------------- faders ---------------- */
+document.querySelectorAll(".fader").forEach(el => {
+  const p = el.dataset.p, c = P[p];
+  el.innerHTML = `<div class="trk2"></div><div class="fcap"></div>`;
+  el.setAttribute("role", "slider"); el.setAttribute("aria-label", p);
+  const cap = el.querySelector(".fcap");
+  const render = () => { cap.style.left = (14 + toN(c) * (300 - 28)) + "px"; el.setAttribute("aria-valuetext", c.fmt(c.v)); };
+  const fromX = x => { const r = el.getBoundingClientRect(), s = r.width / 300; return (x - r.left - 14 * s) / ((300 - 28) * s); };
+  const setN = n => { c.v = fromN(c, clamp(n, 0, 1)); render(); apply(p); flash(c.fmt(c.v)); };
+  controls[p] = { set(v){ c.v = v; render(); apply(p); } };
+  el.addEventListener("pointerdown", e => { el.setPointerCapture(e.pointerId); setN(fromX(e.clientX)); e.preventDefault(); });
+  el.addEventListener("pointermove", e => { if (el.hasPointerCapture(e.pointerId)) setN(fromX(e.clientX)); });
+  el.addEventListener("keydown", e => {
+    const d = {ArrowUp:1, ArrowRight:1, ArrowDown:-1, ArrowLeft:-1}[e.key];
+    if (d) { e.preventDefault(); setN(toN(c) + d * .03); }
+  });
+  render();
+  // engraved scale
+  const sc = el.nextElementSibling;
+  let h = "";
+  for (let i = 0; i <= 20; i++) { const x = 14 + i / 20 * 272; h += `<i style="left:${x}px;height:${i % 5 ? 5 : 9}px"></i>`; }
+  ["20", "15", "10", "5", "0"].forEach((t, i) => h += `<span style="left:${14 + i / 4 * 272}px">${t}</span>`);
+  sc.innerHTML = h;
+});
+
+/* ---------------- toggles ---------------- */
+function makeToggle(el, on, cb){
+  el.innerHTML = `<div class="nutwrap"><div class="nut"></div></div><div class="well"></div><div class="lever"></div>`;
+  const set = v => { on = v; el.classList.toggle("down", !on); el.setAttribute("aria-checked", on); cb(on); };
+  el.addEventListener("click", () => set(!on));
+  el.addEventListener("keydown", e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); set(!on); } });
+  set(on);
+  return { set, get: () => on };
+}
+
+/* ---------------- sequencer data ---------------- */
+const TRACKS = ["KICK", "SNARE", "TOM", "HI-HAT"];
+const pat = s => [...s].map(ch => ch === "x");
+const presets = [
+  {name:"KONRAD GROOVE", tempo:96, swing:28, rows:["x.....x.x.....x.", "....x.......x...", "..........x...xx", "x.x.x.x.x.x.x.x."]},
+  {name:"BOOM BAP 90",   tempo:90, swing:55, rows:["x.......x.x.....", "....x.......x...", "................", "x.x.x.x.x.x.x.xx"]},
+  {name:"FOUR ON FLOOR", tempo:124,swing:0,  rows:["x...x...x...x...", "....x.......x...", "......x.......x.", "..x...x...x...x."]},
+  {name:"BREAKBEAT",     tempo:108,swing:12, rows:["x.x.......xx....", "....x..x.x..x..x", "...............x", "x.x.x.x.x.x.x.x."]},
+  {name:"HALFTIME",      tempo:140,swing:20, rows:["x.........x.....", "........x.......", "...x..........x.", "x.xxx.x.x.xxx.x."]},
+  {name:"INITIALIZE",    tempo:100,swing:0,  rows:["................", "................", "................", "................"]},
+];
+let preset = 0;
+let grid = presets[0].rows.map(pat);
+const muted = [false, false, false, false];
+let steps = 16;
+
+const tracksEl = $("#tracks"), gridEl = $("#grid");
+const trkLeds = [];
+TRACKS.forEach((t, r) => {
+  const b = document.createElement("button");
+  b.className = "trk"; b.setAttribute("aria-label", "Mute " + t);
+  b.innerHTML = `<span class="lbl">${t}</span><span class="led on"></span>`;
+  trkLeds[r] = b.querySelector(".led");
+  b.addEventListener("click", () => {
+    muted[r] = !muted[r];
+    b.classList.toggle("muted", muted[r]); trkLeds[r].classList.toggle("on", !muted[r]);
+    flash(`${t} ${muted[r] ? "MUTED" : "ON"}`);
+    if (!muted[r]) audition(r);
+  });
+  tracksEl.appendChild(b);
+});
+const nums = [], pads = [];
+for (let i = 0; i < 16; i++) {
+  const n = document.createElement("div");
+  n.className = "num" + (i >= 4 ? " g" + (i >> 2) : ""); n.textContent = i + 1;
+  gridEl.appendChild(n); nums.push(n);
+}
+for (let r = 0; r < 4; r++) {
+  pads[r] = [];
+  for (let i = 0; i < 16; i++) {
+    const b = document.createElement("button");
+    b.className = "pad" + (i >= 4 ? " g" + (i >> 2) : "");
+    b.setAttribute("aria-label", `${TRACKS[r]} krok ${i + 1}`);
+    b.addEventListener("click", () => {
+      grid[r][i] = !grid[r][i]; renderPads();
+      if (grid[r][i] && !playing) audition(r);
+    });
+    gridEl.appendChild(b); pads[r][i] = b;
+  }
+}
+function renderPads(){
+  for (let r = 0; r < 4; r++) for (let i = 0; i < 16; i++) {
+    const b = pads[r][i];
+    b.classList.toggle("on", grid[r][i]);
+    b.classList.toggle("dim", i >= steps);
+    b.setAttribute("aria-pressed", grid[r][i]);
+  }
+}
+let curStep = -1;
+function showStep(s){
+  if (curStep >= 0) { nums[curStep].classList.remove("now"); pads.forEach(row => row[curStep].classList.remove("now")); }
+  curStep = s;
+  if (s >= 0) { nums[s].classList.add("now"); pads.forEach(row => row[s].classList.add("now")); }
+}
+
+function loadPreset(i){
+  preset = (i + presets.length) % presets.length;
+  const p = presets[preset];
+  grid = p.rows.map(pat);
+  controls.tempo.set(p.tempo); controls.swing.set(p.swing);
+  lcdSub.textContent = "P" + String(preset + 1).padStart(2, "0");
+  clearTimeout(lcdTimer); lcd.textContent = p.name;
+  renderPads();
+}
+$("#prev").onclick = () => loadPreset(preset - 1);
+$("#next").onclick = () => loadPreset(preset + 1);
+
+/* save / load (per-viewer convenience only) */
+$("#save").onclick = () => {
+  const data = {grid, params:Object.fromEntries(Object.entries(P).map(([k, c]) => [k, c.v])), reverb:rev, steps};
+  try { localStorage.setItem("drumlooper.user", JSON.stringify(data)); flash("SAVED · USER"); }
+  catch { flash("SAVE ERROR"); }
+};
+$("#load").onclick = () => {
+  let data = null;
+  try { data = JSON.parse(localStorage.getItem("drumlooper.user")); } catch {}
+  if (!data) return flash("EMPTY SLOT");
+  grid = data.grid;
+  for (const k in data.params) if (controls[k]) controls[k].set(data.params[k]);
+  setReverb(data.reverb || 0); stepToggle.set(data.steps !== 8);
+  renderPads(); flash("LOADED · USER", 1400);
+};
+
+/* ---------------- reverb types ---------------- */
+const REVERBS = [
+  {name:"Great British Spring", len:.7,  curve:3.2, damp:.5,  spring:true},
+  {name:"Plate 140",            len:1,   curve:2.2, damp:.8},
+  {name:"Studio Room A",        len:.35, curve:4,   damp:.45},
+  {name:"Tape Echo Chamber",    len:.85, curve:2.6, damp:.28},
+  {name:"St. Mary's Cathedral", len:1.7, curve:1.6, damp:.35},
+];
+let rev = 0;
+function setReverb(i){ rev = (i + REVERBS.length) % REVERBS.length; $("#rname").textContent = REVERBS[rev].name; apply("decay"); }
+$("#rup").onclick = () => setReverb(rev - 1);
+$("#rdn").onclick = () => setReverb(rev + 1);
+
+/* ---------------- switches ---------------- */
+let bypassed = false, hifi = true, swingOn = true;
+makeToggle($("#bypass"), false, on => { bypassed = on; $("#fxLed").classList.toggle("on", !on); apply("bypass"); if (ready) flash(on ? "BYPASS ON" : "FX ACTIVE"); });
+makeToggle($("#enhance"), true, on => { hifi = on; $("#hifiLed").classList.toggle("on", on); apply("enhance"); if (ready) flash(on ? "ENHANCE · HIFI" : "ENHANCE · NATURAL"); });
+const stepToggle = makeToggle($("#stepmode"), true, on => {
+  steps = on ? 16 : 8; $("#stepLed").classList.toggle("on", on); $("#stepTxt").textContent = steps;
+  renderPads(); if (ready) flash(`STEPS · ${steps}`);
+});
+const sync = $("#sync");
+sync.onclick = () => { swingOn = !swingOn; sync.classList.toggle("on", swingOn); sync.setAttribute("aria-pressed", swingOn); flash(swingOn ? "SWING SYNC ON" : "SWING OFF"); };
+
+/* ---------------- audio ---------------- */
+function initAudio(){
+  if (ctx) return;
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const g = () => ctx.createGain();
+  A.input = g(); A.shaper = ctx.createWaveShaper(); A.shaper.oversample = "2x"; A.driveComp = g();
+  A.hp = ctx.createBiquadFilter(); A.hp.type = "highpass"; A.hp.Q.value = .5;
+  A.lp = ctx.createBiquadFilter(); A.lp.type = "lowpass";  A.lp.Q.value = .5;
+  A.shelf = ctx.createBiquadFilter(); A.shelf.type = "highshelf"; A.shelf.frequency.value = 6500;
+  A.air = ctx.createBiquadFilter(); A.air.type = "peaking"; A.air.frequency.value = 120; A.air.Q.value = .8;
+  A.dry = g(); A.pre = ctx.createDelay(1); A.conv = ctx.createConvolver(); A.wet = g();
+  A.fx = g(); A.bypass = g(); A.out = g();
+  A.limit = ctx.createDynamicsCompressor();
+  Object.assign(A.limit, {}); A.limit.threshold.value = -4; A.limit.ratio.value = 14; A.limit.attack.value = .003; A.limit.release.value = .12;
+
+  A.input.connect(A.shaper).connect(A.driveComp).connect(A.hp).connect(A.lp).connect(A.shelf).connect(A.air);
+  A.air.connect(A.dry).connect(A.fx);
+  A.air.connect(A.pre).connect(A.conv).connect(A.wet).connect(A.fx);
+  A.fx.connect(A.out);
+  A.input.connect(A.bypass).connect(A.out);
+  A.out.connect(A.limit).connect(ctx.destination);
+
+  noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+  const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  ["input","drive","hipass","lopass","predelay","mix","output","bypass","enhance"].forEach(apply);
+  buildIR();
+}
+function buildIR(){
+  const R = REVERBS[rev], rate = ctx.sampleRate;
+  const len = Math.max(1, Math.floor(rate * P.decay.v * R.len));
+  const buf = ctx.createBuffer(2, len, rate);
+  for (let ch = 0; ch < 2; ch++) {
+    const out = buf.getChannelData(ch); let y = 0;
+    for (let i = 0; i < len; i++) {
+      const t = i / len, env = Math.pow(1 - t, R.curve);
+      let n = (Math.random() * 2 - 1) * env;
+      if (R.spring) {
+        const s = i / rate;
+        n += Math.sin(2 * Math.PI * s * (1900 + 500 * Math.sin(s * 9 + ch))) * .35 * Math.pow(1 - t, 5);
+        n *= 1 + .5 * Math.sin(2 * Math.PI * s * 23);
+      }
+      y += R.damp * (n - y); out[i] = y;
+    }
+  }
+  A.conv.buffer = buf;
+}
+function apply(p){
+  if (!ctx) return;
+  const t = ctx.currentTime, ramp = (prm, v) => prm.setTargetAtTime(v, t, .02);
+  const db = x => Math.pow(10, x / 20);
+  switch (p) {
+    case "input": ramp(A.input.gain, db(P.input.v)); break;
+    case "output": ramp(A.out.gain, db(P.output.v)); break;
+    case "drive": {
+      const k = P.drive.v / 100 * 40, n = 1024, c = new Float32Array(n);
+      for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; c[i] = (1 + k) * x / (1 + k * Math.abs(x)); }
+      A.shaper.curve = c; ramp(A.driveComp.gain, 1 / (1 + k * .18)); break;
+    }
+    case "hipass": ramp(A.hp.frequency, P.hipass.v); break;
+    case "lopass": ramp(A.lp.frequency, P.lopass.v); break;
+    case "predelay": ramp(A.pre.delayTime, P.predelay.v / 1000); break;
+    case "mix": ramp(A.wet.gain, P.mix.v * 1.4); ramp(A.dry.gain, 1 - P.mix.v * .35); break;
+    case "decay": clearTimeout(irTimer); irTimer = setTimeout(buildIR, 120); break;
+    case "bypass": ramp(A.fx.gain, bypassed ? 0 : 1); ramp(A.bypass.gain, bypassed ? 1 : 0); break;
+    case "enhance": ramp(A.shelf.gain, hifi ? 5 : 0); ramp(A.air.gain, hifi ? 2.5 : 0); break;
+  }
+}
+function noise(t, dur){ const s = ctx.createBufferSource(); s.buffer = noiseBuf; s.start(t, Math.random() * .5); s.stop(t + dur); return s; }
+function env(t, peak, dur){ const a = ctx.createGain(); a.gain.setValueAtTime(0, t); a.gain.linearRampToValueAtTime(peak, t + .002); a.gain.exponentialRampToValueAtTime(.0008, t + dur); return a; }
+function voice(r, t){
+  const L = .35 + P.gate.v * 1.3;
+  if (r === 0) {
+    const o = ctx.createOscillator(), a = env(t, 1, .42 * L);
+    o.frequency.setValueAtTime(165, t); o.frequency.exponentialRampToValueAtTime(44, t + .12);
+    o.connect(a).connect(A.input); o.start(t); o.stop(t + .45 * L + .05);
+    const c = noise(t, .01), ca = env(t, .25, .008), cf = ctx.createBiquadFilter(); cf.type = "highpass"; cf.frequency.value = 2000;
+    c.connect(cf).connect(ca).connect(A.input);
+  } else if (r === 1) {
+    const n = noise(t, .3 * L), f = ctx.createBiquadFilter(); f.type = "highpass"; f.frequency.value = 1100;
+    n.connect(f).connect(env(t, .55, .2 * L)).connect(A.input);
+    const o = ctx.createOscillator(); o.type = "triangle"; o.frequency.setValueAtTime(210, t); o.frequency.exponentialRampToValueAtTime(160, t + .08);
+    o.connect(env(t, .5, .1 * L)).connect(A.input); o.start(t); o.stop(t + .15 * L + .02);
+  } else if (r === 2) {
+    const o = ctx.createOscillator(); o.frequency.setValueAtTime(260, t); o.frequency.exponentialRampToValueAtTime(115, t + .28);
+    o.connect(env(t, .75, .38 * L)).connect(A.input); o.start(t); o.stop(t + .4 * L + .02);
+  } else {
+    const n = noise(t, .08 * L), f = ctx.createBiquadFilter(), f2 = ctx.createBiquadFilter();
+    f.type = "highpass"; f.frequency.value = 7000; f2.type = "peaking"; f2.frequency.value = 10500; f2.gain.value = 6;
+    n.connect(f).connect(f2).connect(env(t, .32, .05 * L)).connect(A.input);
+  }
+}
+function audition(r){ initAudio(); ctx.resume(); voice(r, ctx.currentTime + .01); }
+
+/* ---------------- transport ---------------- */
+let playing = false, step = 0, nextT = 0;
+const queue = [];
+function schedule(){
+  while (nextT < ctx.currentTime + .12) {
+    const six = 60 / P.tempo.v / 4;
+    let t = nextT;
+    if (step % 2 === 1 && swingOn) t += six * (P.swing.v / 100) * .5;
+    for (let r = 0; r < 4; r++) if (grid[r][step] && !muted[r]) voice(r, t);
+    queue.push({step, t});
+    step = (step + 1) % steps;
+    nextT += six;
+  }
+}
+setInterval(() => { if (playing) schedule(); }, 25);
+const playBtn = $("#play");
+function frame(){
+  if (playing) {
+    while (queue.length && queue[0].t <= ctx.currentTime) {
+      const s = queue.shift().step; showStep(s);
+      if (s % 4 === 0) { playBtn.classList.add("beat"); setTimeout(() => playBtn.classList.remove("beat"), 90); }
+    }
+    requestAnimationFrame(frame);
+  }
+}
+playBtn.onclick = async () => {
+  initAudio(); await ctx.resume();
+  playing = !playing;
+  playBtn.classList.toggle("on", playing);
+  $("#playLbl").textContent = playing ? "STOP" : "PLAY";
+  if (playing) { step = 0; nextT = ctx.currentTime + .05; queue.length = 0; requestAnimationFrame(frame); }
+  else showStep(-1);
+};
+addEventListener("keydown", e => { if (e.code === "Space" && e.target === document.body) { e.preventDefault(); playBtn.click(); } });
+
+/* ---------------- boot ---------------- */
+loadPreset(0);
+setReverb(0);
+ready = true;
+doFit();
+document.fonts && document.fonts.ready.then(doFit);
+})();
+</script>
+</body>
+</html>
